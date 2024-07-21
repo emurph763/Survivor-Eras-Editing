@@ -20,15 +20,15 @@ output:
 <style type="text/css">
 
 body, td {
-   font-size: 14px;
+   font-size: 18px;
    font-family: Optima;
 }
 code.r{
-  font-size: 14px;
+  font-size: 18px;
   font-family: Optima;
 }
 pre {
-  font-size: 12px;
+  font-size: 16px;
   font-family: Optima;
 }
 </style>
