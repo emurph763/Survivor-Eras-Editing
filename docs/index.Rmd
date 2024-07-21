@@ -77,7 +77,7 @@ I would also like to point out why specifically I'm using the final five players
 
 To perform this analysis, I'll be using Daniel Ohem's `survivoR` package containing data sets from all seasons from Survivor US. These data sets highlights the details like the cast, events, confessionals, and results of each season.
 
-```{r}
+```{r include=F}
 # Necessary Packages
 library(tidyverse)
 library(knitr)
@@ -88,7 +88,7 @@ library(ggpubr)
 library(forcats)
 ```
 
-```{r}
+```{r include=F}
 # Load Data
 data(castaway_details)
 data(castaways)
@@ -102,7 +102,7 @@ data(season_summary)
 data(episodes)
 ```
 
-```{r}
+```{r include=F}
 # Define List of Seasons in Each Era
 golden_seasons <- c("US15", "US16", "US17", "US18", "US19", "US20")
 bigmove_seasons <- c("US31", "US32", "US33", "US34", "US35", "US36")
@@ -125,7 +125,7 @@ newera_cast <- castaways %>%
   filter(version_season %in% newera_seasons)
 ```
 
-```{r}
+```{r include=F}
 # Join Castaway Results and Details
 us_cast <- left_join(us_cast, castaway_details, by="castaway_id")
 golden_cast <- left_join(golden_cast, castaway_details, by="castaway_id")
@@ -133,7 +133,7 @@ bigmove_cast <- left_join(bigmove_cast, castaway_details, by="castaway_id")
 newera_cast <- left_join(newera_cast, castaway_details, by="castaway_id")
 ```
 
-```{r}
+```{r include=F}
 # Golden Era Final Five
 golden_f5 <- golden_cast %>% 
   group_by(season) %>% 
