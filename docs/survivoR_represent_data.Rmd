@@ -1,0 +1,708 @@
+---
+title: "Analyzing Impact of CBS's DEI Casting Initiative on Survivor Editing Practices"
+author: "Emily Murphy"
+date: "July 19, 2024"
+output:
+  html_document:
+    toc: true
+    toc_depth: '1'
+    df_print: paged
+  html_notebook:
+    theme: sandstone
+    toc: true
+    toc_depth: 1
+    toc_float:
+      collapsed: false
+    df_print: kable
+---
+
+```{=html}
+<style type="text/css">
+
+body, td {
+   font-size: 14px;
+   font-family: Optima;
+}
+code.r{
+  font-size: 14px;
+  font-family: Optima;
+}
+pre {
+  font-size: 12px;
+  font-family: Optima;
+}
+</style>
+```
+```{r, include=FALSE}
+# Formatting
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning = FALSE, size = "tiny")
+plot_font <- list(family="Optima", size=16)
+plot_width <- 550
+plot_height <- 500
+```
+
+# Analyzing Impact of CBS's DEI Casting Initiative on Survivor Editing Practices
+
+First airing in the beginning of 2000, *Survivor* has captured the attention of million of viewers in the US and around the world. Now it its upcoming 47th (!) season, some would even argue that the show is experiencing a resurgence in popularity with spikes in viewership among the key 18-35 age demographic for the last two seasons.
+
+One key aspect of the show that keeps it feeling fresh and relevant is the societal aspect of the show. From the jump, host and co-creator Jeff Probst has insisted that the secret sauce to the success of Survivor is the simple fact that the game comes down to putting 14 strangers on a beach and forcing them to build a society. Every cast is different and every cast will play the game differently each time. Because of this, the show naturally keeps up with the progression of societal norms and practices.
+
+One such effort towards keeping up with societal expectations comes in the form of a DEI initiative put forth by CBS in 2020 to mandate that each cast of a reality competition show be comprised of 50% BIPOC people. Survivor also concurrently started casting Canadian players on the US syndicate. As a dedicated fan of the show, I not only support this decision wholeheartedly, but I also have a feeling that this initiative has changed the way characters are edited and what voices the Survivor team cares about highlighting. To me, game play in the new era is rooted in social relationships. This hearkens back to the older seasons of Survivor US, when social relationships and social strategy were at the forefront of most seasons – a dynamic that will not always be present in further eras of the show.
+
+So, does the data support my intuition? Has the casting initiative put forth in 2020 actually changed the way the game has been played? In order to move towards answering these questions, I'll first explain what analysis I'll be doing.
+
+# Description of Analysis and KPI's
+
+I'm specifically going to be focusing on comparing parity in final fives when it comes to racial and ethnic identity from three separate eras of the show: the "Golden Era" of Survivor (Seasons 15-20), the "Big Moves Era" (Seasons 31-36), and the "New Era" (Seasons 41-46). As with any show that runs for multiple decades, Survivor has gone through stages or eras of the show that are marked by differing editing styles, expectations on what makes a castaway's game worthy of the title of Sole Survivor, and general societal norms that influence every new cast that comes in.
+
+## Era Breakdown
+
+The "Golden Era" holds some of the most highly rated seasons of the entire US franchise among viewers. This era is marked by incredibly compelling social relationships, larger-than-life characters, new and emerging strategic plays, and incredible locations. The Golden Era of Survivor is considered by many to be just that – the best the show has ever been.
+
+The "Big Moves" Era represents an era of incredible stagnation when it comes to viewership and audience opinion. This era is mostly marked by an emphasis on "resumés" of big strategic moves, challenge wins, and idol plays. Social strategy falls to the wayside a bit in this era, leaving stronger players to rise to power and make it deep into the game. This is also the era that directly precedes the DEI initiative.
+
+Lastly, the "New Era" holds the seasons that have aired since the DEI initiative was put in place. The goal with this era is to see how it compares to the two previously chosen eras when it comes to the final five players left in each season.
+
+## Markers of Success
+
+To analyze my hypothesis, our KPI's here will be two-fold. First, I'm going to measure the parity of White and BIPOC final five castaways when it comes to their overall confessional index count. This `index_count` variable is a standardized measure of how many confessionals a single castaway received in each episode in comparison with the other castaways. For example, if a castaway has an `index_count` of 1, then they received the average, expected number of confessionals for that episode. However, if a castaway has an `index_count` of 1.5, they received 50% more confessionals than the other castaways in that episode. I'll dive deeper into how I utilize those index counts later on.
+
+Secondly, we're going to quantitatively compare the cross section of overall BIPOC representation and their respective index counts. If there looks to be more equitable editing between BIPOC and White Castaways in the New Era compared to the previous two, then that could suggest that CBS's casting initiative correlates with changed editing practices. If the that cross-section in the New Era is comparable to that of the Golden Era, then that might also suggest there could be a shift in editing practices after 2020 that mirrors the older, more social seasons of the show.
+
+## Last Note
+
+I would also like to point out why specifically I'm using the final five players in each season compared to the winners or even final tribal council members. Most of this comes down to the game's structure in its endgame. Players who make it down to the final five are the players who made it to the endgame, but each season's format differs at the final stages. Some seasons have a final three and some have a final two, so choosing to analyze the top five players in each season circumvents those variances.
+
+# Data Import and Cleaning
+
+To perform this analysis, I'll be using Daniel Ohem's `survivoR` package containing data sets from all seasons from Survivor US. These data sets highlights the details like the cast, events, confessionals, and results of each season.
+
+```{r}
+# Necessary Packages
+library(tidyverse)
+library(knitr)
+library(survivoR)
+library(janitor)
+library(plotly)
+library(ggpubr)
+library(forcats)
+```
+
+```{r}
+# Load Data
+data(castaway_details)
+data(castaways)
+data(confessionals)
+data(viewers)
+data(vote_history)
+data(jury_votes)
+data(tribe_colours)
+data(viewers)
+data(season_summary)
+data(episodes)
+```
+
+```{r}
+# Define List of Seasons in Each Era
+golden_seasons <- c("US15", "US16", "US17", "US18", "US19", "US20")
+bigmove_seasons <- c("US31", "US32", "US33", "US34", "US35", "US36")
+newera_seasons <- c("US41", "US42", "US43", "US44", "US45", "US46")
+
+# Filter Out Relevant Seasons
+us_cast <- castaways %>% 
+  filter(version == "US")
+
+# Golden Era Cast
+golden_cast <- castaways %>% 
+  filter(version_season %in% golden_seasons)
+
+# Big Moves Era Cast
+bigmove_cast <- castaways %>% 
+  filter(version_season %in% bigmove_seasons)
+
+# New Era Cast
+newera_cast <- castaways %>% 
+  filter(version_season %in% newera_seasons)
+```
+
+```{r}
+# Join Castaway Results and Details
+us_cast <- left_join(us_cast, castaway_details, by="castaway_id")
+golden_cast <- left_join(golden_cast, castaway_details, by="castaway_id")
+bigmove_cast <- left_join(bigmove_cast, castaway_details, by="castaway_id")
+newera_cast <- left_join(newera_cast, castaway_details, by="castaway_id")
+```
+
+```{r}
+# Golden Era Final Five
+golden_f5 <- golden_cast %>% 
+  group_by(season) %>% 
+  top_n(5, order) %>% 
+  mutate(era = "Golden")
+
+# Big Moves Era Final Five
+bigmove_f5 <- bigmove_cast %>% 
+  group_by(season) %>% 
+  top_n(5, order) %>% 
+  mutate(era = "Big Moves")
+
+# New Era Final Five
+newera_f5 <- newera_cast %>% 
+  group_by(season) %>% 
+  top_n(5, order) %>% 
+  mutate(era = "New")
+```
+
+```{r include=F}
+# Define Color Palettes for Each Era
+golden_colors <- c("#CCFF99","#FF9933")
+bigmove_colors <- c("#DC3D0D","#500C8E")
+newera_colors <- c("#2B8DCB","#CA74CF")
+demo_colors <- c("#D99CD3", "#6CBDB6", "#F400A1")
+```
+
+# Demographic Breakdown
+
+Now that we have our final fives from each season it our respective eras, let's take a look at some visualizations for each era.
+
+```{r include=F}
+# Set Demographic Plot Attributes
+bipoc_colors <- c("#2B8DCB","#CCFF99")
+
+#Define Hover Info Templates for Plotly Objects
+bipoc_hover <- paste("<em>Era</em>: %{x}", '<br><em>BIPOC Castaways</em>: %{y}<br>')
+white_hover <- paste("<em>Era</em>: %{x}", '<br><em>White Castaways</em>: %{y}<br>')
+```
+
+## BIPOC vs. White Final Five Castaways By Era
+
+Firstly, let's take a look at the breakdown between BIPOC castaways and White castaways from each era. CBS's casting initiative specifically stipulates quotas for casting based on ethnicity, so the expectation is that we see similar levels between the Golden and Big Moves era, and a drastic change in the New Era.
+
+```{r include=FALSE}
+# Create BIPOC and White Final Five Data Frames
+overall_f5 <- bind_rows(golden_f5, bigmove_f5, newera_f5) %>% 
+  mutate(era = factor(era, levels = c("Golden", "Big Moves", "New")))
+
+overall_bipoc <- overall_f5 %>% group_by(era) %>% 
+  filter(bipoc == TRUE) %>% 
+  count()
+
+overall_white <- overall_f5 %>% group_by(era) %>% 
+  filter(bipoc == FALSE) %>% 
+  count()
+```
+
+```{r echo=FALSE}
+# BIPOC vs White Castaway Plotly Bar Chart
+fig1 <- overall_f5 %>% plot_ly(width = plot_width, height = plot_height)
+fig1 <- fig1 %>% add_trace(data=overall_bipoc, x=~era, y=~n, type="bar", name="BIPOC Castaways",
+                         text=~n, textposition="auto",
+                         hovertemplate = bipoc_hover,
+                         marker=list(color=bipoc_colors[1], line=list(color="#000000",
+                                                                width=1.5)))
+fig1 <- fig1 %>% add_trace(data=overall_white, x=~era, y=~n, type="bar", name="White Castaways",
+                         text=~n, textposition="auto",
+                         hovertemplate = white_hover,
+                         marker=list(color=bipoc_colors[2], line=list(color="#000000",
+                                                                width=1.5)))
+fig1 <- fig1 %>% layout(barmode = "group",
+                      xaxis=list(title="Era"),
+                      yaxis=list(title="Number of Castaways"),
+                      font=plot_font)
+fig1
+```
+
+As we can see, the casting initiative made a huge difference in the number of BIPOC castaways cast during each era. In fact, there are more BIPOC castaways than White Castaways in the new era.
+
+## Breakdown of BIPOC Final Five Castaways by Era
+
+```{r include=F}
+demo_hover <- paste("<em>Era</em>: %{x}", '<br><em>Number of Castaways</em>: %{y}<br>', '<em>Race or Ethnicity</em>: %{customdata}')
+```
+
+To take us a step further, let's take a bit more of an in-depth look at the demographic breakdown of each era. Since we already have an idea of how many white final five castaways there are in each era, we're going to specifically focus on the breakdown of the BIPOC final five castaways.
+
+```{r include=F}
+# Create Data Frames for Each Demographic Count by Era
+overall_black <- overall_f5 %>% 
+  filter(race == "Black") %>% 
+  group_by(era, race) %>% 
+  count()
+
+overall_asian <- overall_f5 %>% 
+  filter(race == "Asian") %>% 
+  group_by(era, race) %>% 
+  count()
+
+overall_latine <- overall_f5 %>%
+  filter(bipoc == TRUE) %>% 
+  mutate(race = replace_na(race, "Latine")) %>% 
+  filter(race == "Latine") %>% 
+  group_by(era, race) %>% 
+  count()
+```
+
+```{r echo=FALSE}
+# BIPOC Final Five Castaway Plotly Bar Chart
+fig2 <- overall_f5 %>% plot_ly(width = plot_width, height = plot_height)
+fig2 <- fig2 %>% add_trace(data=overall_black, x=~era, y=~n, type="bar", name="Black Castaways",
+                         text=~n, textposition="auto", customdata=~race,
+                         hovertemplate = demo_hover,
+                         marker=list(color=demo_colors[1], line=list(color="#000000",
+                                                                width=1.5)))
+fig2 <- fig2 %>% add_trace(data=overall_asian, x=~era, y=~n, type="bar", name="Asian Castaways",
+                         text=~n, textposition="auto", customdata=~race,
+                         hovertemplate = demo_hover,
+                         marker=list(color=demo_colors[2], line=list(color="#000000",
+                                                                width=1.5)))
+fig2 <- fig2 %>% add_trace(data=overall_latine, x=~era, y=~n, type="bar", name="Latine Castaways",
+                         text=~n, textposition="auto", customdata=~race,
+                         hovertemplate = demo_hover,
+                         marker=list(color=demo_colors[3], line=list(color="#000000",
+                                                                width=1.5)))
+fig2 <- fig2 %>% layout(barmode = "group",
+                        xaxis=list(title="Era"),
+                        yaxis=list(title="Number of Castaways"),
+                        font=plot_font)
+fig2
+```
+
+Something worth noting from this breakdown is the rather drastic jump in Latine representation among final five players in the New Era. The New Era saw the franchise's first Puerto Rican winner and its first Cuban Winner as well.
+
+## Conclusion
+
+Overall, the demographic breakdown between BIPOC and White final five castaways was as expected. We went from parity of approximately 75% of final five castaways in both the Golden Era and Big Moves Era identifying as White to a little over 50% of final five castaways identifying as BIPOC. The fact that representation between the Golden Era and the Big Moves era doesn't necessarily bode well for part of my hypothesis suggesting changes in the New Era when it comes to casting mirrors editing practices in the Golden Era, but I'm hesitant to make any judgement without looking more quantitatively at confessional counts.
+
+# Confessional Representation
+
+We now have an idea of demographic representation in each era, but were the editors and producers of Survivor equitable when allotting screen time to each final five castaway? Confessional counts give us an insight into which castaways were the "voice" or the narrator of the season. Castaways with the highest confessional counts are the characters we hear from the most. Even if they don't win, castaways with higher confessional counts tend to be among the most memorable for their respective season. The opposite can also be true for castaways with comparatively lower confessional counts, but that may not always be the case.
+
+When it comes to Survivor US, there are well-known examples of castaways and even winners who fans felt were over or under-edited. Some of those castaways are represented in our data – Ben Driebergen from the Big Moves Era is considered to be over-edited by a large swath of fans, while Erika Casupanan from the New Era is considered to be an incredibly under-edited winner. Looking into the confessional and screen time breakdown may tell us a lot about who and what kind of playing-style are valued in a given season.
+
+I'll make a few notes about other aspects of demographics represented in the confessional count breakdowns from each era, but we'll do a more robust quantitative comparison of BIPOC editing parity later on. That being said, however, the bar charts are color-coded depending on whether a castaway is BIPOC identifying or not so we have a visual idea of representation in each era.
+
+Lastly, I want to highlight that for these bar charts, I'm making a new variable `overall_index_count` that standardizes the index around 0 instead of one and takes the sum of all episodes a given castaway appeared in. This gives us a much better idea of which castaways are over-edited and which ones are under-edited over their entire season just by looking at the visualizations.
+
+```{r include=FALSE}
+# Define Hover Info Templates for Plotly Objects
+under_hover <- paste("<em>Name</em>: %{y}",'<br><em>Index Count</em>: %{base:.2f}<br>',
+                     '<em>Season</em>: %{customdata}', 
+                     '<br><em>BIPOC</em>: %{text}<br>')
+over_hover <- paste("<em>Name</em>: %{y}",'<br><em>Index Count</em>: %{x:.2f}<br>',
+                    '<em>Season</em>: %{customdata}', 
+                    '<br><em>BIPOC</em>: %{text}<br>')
+
+# Set Trace Names for Plotly Objects
+under_edit <- "Under-Edited Castaways"
+over_edit <- "Over-Edited Castaways"
+```
+
+## Golden Era Confessionals
+
+To start, let's look at the Golden Era (Seasons 15-20) of Survivor. Again, for this analysis, we'll be looking at the `index_count` variable in the `confessionals` data.
+
+```{r include=FALSE}
+# Create List of Confessional Columns to Keep
+con_init <- c("season", "castaway_id", "episode", "confessional_count", 
+              "confessional_time", "index_count", "index_time")
+con_keep <- c("season", "full_name.x", "castaway_id",
+           "index_count", "bipoc")
+
+# Build Data Frame of Golden Era Confessional Information
+overall_con <- confessionals %>% select(all_of(con_init))
+golden_con <- left_join(golden_f5, overall_con, by=join_by(season,castaway_id)) %>% 
+  select(all_of(con_keep)) %>% 
+  rename(full_name = full_name.x)
+```
+
+```{r include=FALSE}
+# Update Golden Era Confessional Data Frame with Overall Index Count Column
+golden_con <- golden_con %>% 
+  group_by(castaway_id, season) %>% 
+  mutate(overall_index_count = sum(index_count-1)) %>% 
+  select(!index_count) %>% 
+  unique()
+```
+
+```{r echo=FALSE}
+# Create Data Frame of Positive and Negative Golden Era Indexed Confessional Counts
+neg_golden <- golden_con %>% 
+  filter(overall_index_count < 0) %>% 
+  mutate(bar_height = overall_index_count * -1)
+  
+pos_golden <- golden_con %>% 
+  filter(overall_index_count > 0)
+
+# Golden Era Confessional Index Count Plotly Bar Chart
+fig4 <- plot_ly(width = plot_width, height = plot_height)
+
+fig4 <- fig4 %>% add_bars(data=neg_golden, y=~full_name, x=~bar_height,
+                 base=~overall_index_count, customdata=~season,
+                 color=~bipoc, colors=golden_colors,
+                 name=under_edit, text=~bipoc,
+                 hovertemplate = under_hover)
+
+fig4 <- fig4 %>% add_bars(data=pos_golden, y=~full_name, x=~overall_index_count,
+                 base=0, customdata=~season,
+                 color=~bipoc, colors=golden_colors,
+                 name=over_edit, text=~bipoc,
+                 hovertemplate = over_hover)
+
+fig4 <- fig4 %>% layout(showlegend=FALSE,
+                        yaxis=list(title=list(text="Castaway Name")),
+                        xaxis=list(title=list(text="Comparative Confessional Count")),
+                        font=plot_font)
+
+fig4
+```
+
+Let's now take a look at the top 3 over-edited and top 3 under-edited castaways in the Golden Era:
+
+```{r include=FALSE}
+# Set Thresholds for Highest and Lowest Overall Index Counts in Golden Era
+neg_gold_max <- 8
+pos_gold_max <- 9
+
+# Create Data Frames for Golden Era Top 3 and Bottom 3 Overall Index Count
+neg_golden_3 <- neg_golden %>% 
+  select(bar_height, full_name, overall_index_count, season, bipoc) %>% 
+  filter(bar_height > neg_gold_max)
+
+pos_golden_3 <- pos_golden %>% 
+  select(overall_index_count, full_name, season, bipoc) %>% 
+  filter(overall_index_count > pos_gold_max)
+```
+
+```{r echo=FALSE}
+# Golden Era Top Three and Bottom Three Index Count Bar Graph
+fig5 <- plot_ly(width = plot_width, height = plot_height)
+
+fig5 <- fig5 %>% add_bars(data=neg_golden_3, y=~full_name, x=~bar_height,
+                 base=~overall_index_count, customdata=~season,
+                 color=~bipoc, colors=golden_colors,
+                 name=under_edit, text=~bipoc,
+                 hovertemplate = under_hover)
+
+fig5 <- fig5 %>% add_bars(data=pos_golden_3, y=~full_name, x=~overall_index_count,
+                 base=0, customdata=~season,
+                 color=~bipoc, colors=golden_colors,
+                 name=over_edit, text=~bipoc,
+                 hovertemplate = over_hover)
+
+fig5 <- fig5 %>% layout(showlegend=FALSE,
+                        yaxis=list(title=list(text="Castaway Name")),
+                        xaxis=list(title=list(text="Comparative Confessional Count")),
+                        font=plot_font)
+
+fig5
+```
+
+Out of this group, it's worth noting a few things. One, we can see that the top three most over-edited final five castaways were all men, while the top three most under-edited final five castaways were all women. It's also worth noting that there are only two bars that are classified as over-edited. Not only did Russell Hantz participate in seasons 19 and 20, but he also comparatively received the most confessionals out of all other castaways on his respective seasons. Therefore, his confessional counts are stacked on top of each other. It's worth noting, however, that not only did he lose both seasons, but the winner of Season 19 was Natalie White, who received the 2nd lowest comparative confessional count. Natalie is considered by fans to be one of the most under-edited winners the show has seen in its 24 year history.
+
+## Big Moves Era Confessionals
+
+Next let's take a look at confessional breakdowns among the final five castaways in the Big Moves (Seasons 31-36) Era:
+
+```{r include=F}
+# Build Data Frame of Golden Era Confessional Information
+bigmove_con <- left_join(bigmove_f5, overall_con, by=join_by(season,castaway_id)) %>% 
+  select(all_of(con_keep)) %>% 
+  rename(full_name = full_name.x)
+```
+
+```{r include=F}
+# Update Big Moves Era Confessional Data Frame with Overall Index Count Column
+bigmove_con <- bigmove_con %>% 
+  group_by(castaway_id, season) %>% 
+  mutate(overall_index_count = sum(index_count-1)) %>% 
+  select(!index_count) %>% 
+  unique()
+```
+
+```{r echo=F}
+# Create Data Frame of Positive and Negative Big Moves Era Indexed Confessional Counts
+neg_bigmove <- bigmove_con %>% 
+  filter(overall_index_count < 0) %>% 
+  mutate(bar_height = overall_index_count * -1) 
+
+pos_bigmove <- bigmove_con %>% 
+  filter(overall_index_count > 0)
+
+# Big Moves Era Overall Index Count Bar Graph
+fig6 <- plot_ly(width = plot_width, height = plot_height)
+
+fig6 <- fig6 %>% add_bars(data=neg_bigmove, y=~full_name, x=~bar_height,
+                 base=~overall_index_count, customdata=~season,
+                 color=~bipoc, colors=bigmove_colors,
+                 name=under_edit, text=~bipoc,
+                 hovertemplate = under_hover)
+
+fig6 <- fig6 %>% add_bars(data=pos_bigmove, y=~full_name, x=~overall_index_count,
+                 base=0, customdata=~season,
+                 color=~bipoc, colors=bigmove_colors,
+                 name=over_edit, text=~bipoc,
+                 hovertemplate = over_hover)
+
+fig6 <- fig6 %>% layout(showlegend=FALSE,
+                        yaxis=list(title=list(text="Castaway Name")),
+                        xaxis=list(title=list(text="Comparative Confessional Count")),
+                        font=plot_font)
+
+fig6
+```
+
+Now let's take a look at the top three over-edited and under-edited final five castaways from the Big Moves era:
+
+```{r include=F}
+# Set Thresholds for Highest and Lowest Overall Index Counts in Big Moves Era
+neg_bigmove_max <- 6.4
+pos_bigmove_max <- 11
+
+neg_bigmove_3 <- neg_bigmove %>% 
+  select(bar_height, full_name, overall_index_count, season, bipoc) %>% 
+  filter(bar_height > neg_bigmove_max)
+
+pos_bigmove_3 <- pos_bigmove %>% 
+  select(overall_index_count, full_name, season, bipoc) %>% 
+  filter(overall_index_count > pos_bigmove_max)
+```
+
+```{r echo=F}
+# Initialize Figure
+fig7 <- plot_ly(width = plot_width, height = plot_height)
+
+# Add Bottom Three Castaways
+fig7 <- fig7 %>% add_bars(data=neg_bigmove_3, y=~full_name, x=~bar_height,
+                 base=~overall_index_count, customdata=~season,
+                 color=~bipoc, colors=bigmove_colors,
+                 name=under_edit, text=~bipoc,
+                 hovertemplate = under_hover)
+
+# Add Top Three Castaways
+fig7 <- fig7 %>% add_bars(data=pos_bigmove_3, y=~full_name, x=~overall_index_count,
+                 base=0, customdata=~season,
+                 color=~bipoc, colors=bigmove_colors,
+                 name=over_edit, text=~bipoc,
+                 hovertemplate = over_hover)
+
+# Configure layout
+fig7 <- fig7 %>% layout(showlegend=FALSE,
+                        yaxis=list(title=list(text="Castaway Name")),
+                        xaxis=list(title=list(text="Comparative Confessional Count")),
+                        font=plot_font)
+
+fig7
+```
+
+Once again, we can see that just like the Golden Era, the top three final five castayways with the highest confessional counts are all attributed to male players. Some things worth mentioning here is that all none of the top three confessional count recipients are winners, although Domenick came incredibly close with a tie jury vote that was broken by the third-place castaway. Nevertheless, all three players have memorable impacts on their seasons. What's interesting here is that two of the three lowest confessional count recipients are fan-favorites. Aubry Bracco and Keith Nale are castaways that were brought back for future seasons – Keith in particular was brought back to play in Season 31 from a popular vote from the fans. There's a contingency of Survivor fans who believe Aubry should have won her season.
+
+## New Era Confessionals
+
+Lastly, let's take a look at confessional counts in the New (Seasons 41-46) Era. We see a drastic change in demographics when it comes to final five castaways in this era – there are more BIPOC, LGBTQIA+, and female castaways present at the final five in this era than the other two we've seen. Let's see if this change in demographics translates to some interesting findings in who narrates these seasons and who doesn't.
+
+```{r include=F}
+# Build Data Frame of Golden Era Confessional Information
+newera_con <- left_join(newera_f5, overall_con, by=join_by(season,castaway_id)) %>% 
+  select(all_of(con_keep)) %>% 
+  rename(full_name = full_name.x)
+```
+
+```{r include=F}
+# Create Index Count from Whole Season and Normalize Around 0
+newera_con <- newera_con %>% 
+  group_by(castaway_id, season) %>% 
+  mutate(overall_index_count = sum(index_count-1)) %>% 
+  select(!index_count) %>% 
+  unique()
+```
+
+```{r echo=F}
+neg_newera <- newera_con %>% 
+  filter(overall_index_count < 0) %>% 
+  mutate(bar_height = overall_index_count * -1)
+
+pos_newera <- newera_con %>% 
+  filter(overall_index_count > 0)
+
+fig8 <- plot_ly(width = plot_width, height = plot_height)
+
+fig8 <- fig8 %>% add_bars(data=neg_newera, y=~full_name, x=~bar_height,
+                 base=~overall_index_count, customdata=~season,
+                 color=~bipoc, colors=newera_colors,
+                 name=under_edit, text=~bipoc,
+                 hovertemplate = under_hover)
+
+fig8 <- fig8 %>% add_bars(data=pos_newera, y=~full_name, x=~overall_index_count,
+                 base=0, customdata=~season,
+                 color=~bipoc, colors=newera_colors,
+                 name=over_edit, text=~bipoc, textposition="none",
+                 hovertemplate = over_hover)
+
+fig8 <- fig8 %>% layout(showlegend=FALSE,
+                        yaxis=list(title=list(text="Castaway Name")),
+                        xaxis=list(title=list(text="Comparative Confessional Count")),
+                        font=plot_font)
+
+fig8
+```
+
+Now let's take a look at the top three over-edited and under-edited final five castaways from the New era:
+
+```{r include=F}
+# Initialize Thresholds for Top and Bottom Three Overall Index Counts
+neg_newera_max <- 4
+pos_newera_max <- 3
+
+# Create Top and Bottom Three Data Frames
+neg_newera_3 <- neg_newera %>% 
+  select(bar_height, full_name, overall_index_count, season, bipoc) %>% 
+  filter(bar_height > neg_newera_max)
+
+pos_newera_3 <- pos_newera %>% 
+  select(overall_index_count, full_name, season, bipoc) %>% 
+  filter(overall_index_count > pos_newera_max)
+```
+
+```{r echo=F}
+# Initialize Figure  arrange(desc(donation)) %>% 
+fig9 <- plot_ly(width = plot_width, height = plot_height)
+
+# Add Bottom Three Castaways
+fig9 <- fig9 %>% add_bars(data=neg_newera_3, y=~full_name, x=~bar_height,
+                 base=~overall_index_count, customdata=~season,
+                 color=~bipoc, colors=newera_colors,
+                 name=under_edit, text=~bipoc,
+                 hovertemplate = under_hover)
+
+# Add Top Three Castaways
+fig9 <- fig9 %>% add_bars(data=pos_newera_3, y=~full_name, x=~overall_index_count,
+                 base=0, customdata=~season,
+                 color=~bipoc, colors=newera_colors,
+                 name=over_edit, text=~bipoc,
+                 hovertemplate = over_hover)
+
+# Configure layout
+fig9 <- fig9 %>% layout(showlegend=FALSE,
+                        yaxis=list(title=list(text="Castaway Name")),
+                        xaxis=list(title=list(text="Comparative Confessional Count")),
+                        font=plot_font)
+
+fig9
+```
+
+Although we don't have three male castaways in the top spots for comparative confessional count, two out of the three are male. Also interestingly, we have three women receiving the lowest comparative confessional count, so it would seem that we have a slightly larger imbalance of gender parity among final five castaways. However, I'd like to pay specific attention to the y-axes on our visualizations of Top Three and Bottom Three Final Five Castaways across eras. Unlike the axes from the Golden and Big Moves era that have extremes around the 20's, the y-axis on the New Era graph is half as big. This indicates that, although there are still over and under edited castaways in the New era, the difference between extremes is much lower – meaning castaways are getting a more equitable share of confessionals in the New era compared to the Golden and Big Moves era.
+
+## Conclusion
+
+Since we took each castaway's index count from the whole season, not just the final five, there could be several different reasons why a particular castaways has a high, low, or middling index count. But taking a last look at confessionals, one of the largest takeaways from this section to me is the difference in extremes when it comes to comparative confessional counts. Remember that an `index_count` weighs the count of a castaway's confessional in a given episode with how many people are left in the game. Therefore, if the extremes in index count over the entire era is significantly lower in the New Era compared to the others, then that might suggest that there was indeed a move towards more equitable editing.
+
+# Getting Down to the Numbers: How Editing Has Changed Over Time?
+
+Now that we have everything we need to look at the cross-section between BIPOC representation and comparative confessional counts, let's pull some values for quantitative analysis. We'll visualize the total index count of each era and demographic, both under-edited and over-edited. For the sake of readability, I've taken the absolute value of the under-edited index counts and grouped the bars by era – the more level the bars are, the more equatable the confessional distribution is between demographics. Also keep in mind that the larger the index count, the bigger or smaller someone's edit was (depending on whether we're talking about over-edited or under-edited castaways. You may also want to isolate the over-edited and under-edited castaways, which you can do by selecting a group in the legend.
+
+```{r include=F}
+overall_pos <- bind_rows(pos_golden, pos_bigmove, pos_newera, .id = "era") %>% 
+  mutate(era = case_when(
+    era == 1 ~ "Golden Era",
+    era == 2 ~ "Big Moves Era",
+    era == 3 ~ "New Era"),
+    bipoc = if_else(bipoc==TRUE, "BIPOC", "White"),
+    era = factor(era, levels=c("Golden Era", "Big Moves Era", "New Era"))) %>% 
+  group_by(bipoc, era) %>% 
+  mutate(total_index = sum(overall_index_count),
+         count = n()) %>%
+  select(era, bipoc, total_index, count) %>% 
+  unique()
+
+overall_neg <- bind_rows(neg_golden, neg_bigmove, neg_newera, .id = "era") %>% 
+  mutate(era = case_when(
+    era == 1 ~ "Golden Era",
+    era == 2 ~ "Big Moves Era",
+    era == 3 ~ "New Era") ,
+    bipoc = if_else(bipoc==TRUE, "BIPOC", "White"),
+    era = factor(era, levels=c("Golden Era", "Big Moves Era", "New Era"))) %>%
+  group_by(bipoc, era) %>% 
+  mutate(total_index = sum(bar_height),
+         count = n())%>%
+  select(era, bipoc, total_index, count) %>% 
+  unique()
+```
+
+```{r include=F}
+# Define Hover Info Templates for Plotly Objects
+pos_hover <- paste("<em>Era</em>: %{x}",'<br><em>Total Index Count</em>: %{y:.2f}<br>',
+                   '<em>Demographic</em>: %{text}',
+                   '<br><em>Number of Castaways</em>: %{customdata}<br>')
+neg_hover <- paste("<em>Era</em>: %{x}",'<br><em>Total Index Count</em>: %{y:.2f}<br>',
+                   '<em>Demographic</em>: %{text}',
+                   '<br><em>Number of Castaways</em>: %{customdata}<br>')
+```
+
+```{r echo=F}
+# Initiating the plotly object
+fig10 <- plot_ly(width = plot_width, height = plot_height)
+
+# Add "Over Edited Castaways" bars
+fig10 <- fig10 %>% add_bars(data=overall_pos, x=~era, y=~total_index,
+                             marker=list(color=golden_colors[1]), 
+                             color=~bipoc, colors=demo_colors, customdata=~count,
+                             text=~bipoc, textposition="none",
+                             legendgroup="Over Edited Castaways",
+                             name="",  # Set to empty to prevent additional entries
+                             hovertemplate=pos_hover, hoverlabel=list(namelength=0),
+                             showlegend=FALSE)  # Hide individual traces
+
+# Aggregate trace for "Over Edited Castaways"
+fig10 <- fig10 %>% add_bars(data=overall_pos, x=~era, y=~NULL,
+                             marker=list(color=golden_colors[1], opacity=0),
+                             name="Over-Edited Castaways",  # This will appear in the legend
+                             legendgroup="Over Edited Castaways",
+                             hoverinfo="none", showlegend=T)
+
+# Add "Under Edited Castaways" bars
+fig10 <- fig10 %>% add_bars(data=overall_neg, x=~era, y=~total_index,
+                             marker=list(color=newera_colors[2]), 
+                             color=~bipoc, colors=demo_colors, customdata=~count,
+                             text=~bipoc, textposition="none",
+                             legendgroup="Under Edited Castaways",
+                             name="",  # Set to empty to prevent additional entries
+                             hovertemplate=neg_hover, hoverlabel=list(namelength=0),
+                             showlegend=FALSE)  # Hide individual traces
+
+# Aggregate trace for "Under Edited Castaways"
+fig10 <- fig10 %>% add_bars(data=overall_neg, x=~era, y=~NULL,
+                             marker=list(color=newera_colors[2], opacity=0),
+                             name="Under-Edited Castaways",  # This will appear in the legend
+                             legendgroup="Under Edited Castaways",
+                             hoverinfo="none", showlegend=T)
+
+# Layout settings for the plot, including legend options
+fig10 <- fig10 %>% layout(barmode="group",
+                          yaxis=list(title=list(text="Final Five Overall Index Count")),
+                          xaxis=list(title=list(text="Era")),
+                          font=plot_font,
+                          legend=list(traceorder="grouped"))
+
+fig10
+```
+
+For our quantitative analysis, I'll take the overall index count grouped into bins by era and demographic, take the average overall index count by dividing the overall index count by the number of castaways that fall into each respective bin (for example, the number of BIPOC castaways in the New Era who were under-edited). From there, I'll multiply the under-edited average overall index counts by -1 so we can take the sum of the over-edited and under-edited average index counts for each era and demographic.
+
+```{r include=F}
+# Creating Data Frame of Overall Confessional Stats
+overall_rep <- bind_rows(overall_neg, overall_pos, .id="edit_type") %>% 
+  mutate(edit_type = case_when(edit_type == 1 ~ "Under-Edited",
+                               edit_type == 2 ~ "Over-Edited"),
+         avg_index = if_else(edit_type == "Under-Edited", ((total_index/count)*-1), (total_index/count)),
+         demographic = bipoc)
+```
+
+```{r echo=F, message=F}
+overall_rep %>% group_by(era, demographic) %>% 
+  summarize("estimated representation percentage" = round(sum(avg_index)*10,2)) %>% 
+  kable(caption="Percentage of Representation Based on Average Overall Index")
+```
+
+Looking at our visualization and final estimated representation percentage, we can observe that not only does the editing appear much more equitable in the New Era compared to both the Golden Era and the Big Moves Era, but the estimated representation of demographics also changed significantly from era to era. We go from White castaways in the final five of Golden Era seasons getting approximately 30% more confessional counts than the rest of the cast, down to about 20% in the Big Moves Era, then finally about 15% in the New Era.
+
+In conclusion, after considering the confessional counts and demographics between the final five castaways in each season of our three respective eras, our data suggests that there may very well be a change in editing practices that correlates with the establishment of CBS's DEI Casting Initiative. Not only did casting become more equitable, but the distribution of confessional counts among the final fives as well. While it may not even be enough to hint at the New Era of Survivor having a similar editing style to the Golden Era, we can say that Seasons 41-46 of Survivor US have been more equitable and more diverse than it has been in the past.
